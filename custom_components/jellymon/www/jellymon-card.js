@@ -124,10 +124,12 @@ function injectDialogStyles() {
   document.head.appendChild(s);
 }
 
-function openDialog(hass) {
+function openDialog(getHass) {
   // Remove any existing dialog
   document.querySelector(".jm-overlay")?.remove();
 
+  // Always read fresh hass state — never use a stale snapshot
+  const hass = getHass();
   const active = getActive(hass);
   const count = parseInt(active?.state) || 0;
   const hasReporting = active?.attributes?.has_playback_reporting || false;
@@ -184,6 +186,8 @@ function openDialog(hass) {
 
 
   function buildDialog() {
+    // Re-read hass state on every render so dialog always shows current data
+    const hass = getHass();
     overlay.innerHTML = `
       <div class="jm-dialog">
         <div class="jm-header">
@@ -198,14 +202,34 @@ function openDialog(hass) {
       </div>
     `;
 
-    overlay.querySelector(".jm-close").addEventListener("click", () => overlay.remove());
-    overlay.addEventListener("click", e => { if (e.target === overlay) overlay.remove(); });
+    // Close listeners are set once after first buildDialog call
 
 
   }
 
+  // Force immediate data refresh when dialog opens
+  if (getHass()?.callService) {
+    getHass().callService("homeassistant", "update_entity", {
+      entity_id: "sensor.jellyfin_active_sessions",
+    }).then(() => { if (document.body.contains(overlay)) buildDialog(); });
+  }
+
   buildDialog();
   document.body.appendChild(overlay);
+
+  // Auto-refresh every 10 seconds while dialog is open
+  const refreshInterval = setInterval(() => {
+    if (document.body.contains(overlay)) {
+      buildDialog();
+    } else {
+      clearInterval(refreshInterval);
+    }
+  }, 10000);
+
+  // Clear interval when dialog is closed
+  const origClose = () => { clearInterval(refreshInterval); overlay.remove(); };
+  overlay.querySelector(".jm-close").addEventListener("click", origClose);
+  overlay.addEventListener("click", e => { if (e.target === overlay) origClose(); });
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
@@ -248,7 +272,7 @@ class JellyMonCard extends HTMLElement {
         <span class="label">${count === 1 ? "stream" : "streams"}</span>
       </div>
     `;
-    this.shadowRoot.getElementById("b").addEventListener("click", () => openDialog(this._hass));
+    this.shadowRoot.getElementById("b").addEventListener("click", () => openDialog(() => this._hass));
   }
 
   static getStubConfig() { return {}; }
@@ -258,12 +282,16 @@ if (!customElements.get("jellymon-card")) {
   customElements.define("jellymon-card", JellyMonCard);
 }
 
-window.customCards = window.customCards || [];
-if (!window.customCards.find(c => c.type === "jellymon-card")) window.customCards.find(c => c.type === "jellymon-card") || window.customCards.push({
-  type: "jellymon-card",
-  name: "JellyMon",
-  description: "Badge showing active Jellyfin streams. Tap for Now Playing and Stats.",
-  preview: false,
+customElements.whenDefined("jellymon-card").then(() => {
+  window.customCards = window.customCards || [];
+  if (!window.customCards.find(c => c.type === "jellymon-card")) {
+    window.customCards.push({
+      type: "jellymon-card",
+      name: "JellyMon Card",
+      description: "Shows active Jellyfin streams. Tap to see who is playing what.",
+      preview: false,
+    });
+  }
 });
 
 // ─── Badge ────────────────────────────────────────────────────────────────────
@@ -273,10 +301,7 @@ class JellyMonBadge extends HTMLElement {
     super();
     this.attachShadow({ mode: "open" });
     this._config = {};
-  }
-
-  static get properties() {
-    return { hass: {}, config: {} };
+    this._hass = null;
   }
 
   setConfig(config) {
@@ -289,7 +314,12 @@ class JellyMonBadge extends HTMLElement {
     this._render();
   }
 
+  connectedCallback() {
+    if (this._hass) this._render();
+  }
+
   _render() {
+    if (!this._hass) return;
     const active = getActive(this._hass);
     const count = parseInt(active?.state) || 0;
     const color = count > 0 ? "#AA5CC3" : "var(--secondary-text-color,#888)";
@@ -315,27 +345,26 @@ class JellyMonBadge extends HTMLElement {
         <span class="label">${count === 1 ? "stream" : "streams"}</span>
       </div>
     `;
-    this.shadowRoot.getElementById("b").addEventListener("click", () => openDialog(this._hass));
+    this.shadowRoot.getElementById("b").addEventListener("click", () => openDialog(() => this._hass));
   }
 
   static getStubConfig() { return {}; }
-
-  static getConfigElement() {
-    // No editor needed — return a dummy element
-    return document.createElement("div");
-  }
+  static getConfigElement() { return document.createElement("div"); }
 }
 
-// Register only once
+// Register only once, then announce to HA
 if (!customElements.get("jellymon-badge")) {
   customElements.define("jellymon-badge", JellyMonBadge);
 }
 
-window.customBadges = window.customBadges || [];
-if (!window.customBadges.find(b => b.type === "jellymon-badge")) {
-  window.customBadges.push({
-    type: "jellymon-badge",
-    name: "JellyMon",
-    description: "Shows active Jellyfin streams. Tap to see who is playing what.",
-  });
-}
+// Announce after element is fully defined so HA picks it up reliably
+customElements.whenDefined("jellymon-badge").then(() => {
+  window.customBadges = window.customBadges || [];
+  if (!window.customBadges.find(b => b.type === "jellymon-badge")) {
+    window.customBadges.push({
+      type: "jellymon-badge",
+      name: "JellyMon Badge",
+      description: "Shows active Jellyfin streams. Tap to see who is playing what.",
+    });
+  }
+});
