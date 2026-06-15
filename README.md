@@ -4,6 +4,9 @@
 
 A custom Home Assistant integration for monitoring Jellyfin sessions. See who's watching what, on which device, with what codec and bitrate — right from your HA dashboard.
 
+<img width="1080" height="2340" alt="Screenshot_20260615_151130_Home Assistant" src="https://github.com/user-attachments/assets/3d1bdd13-02df-413d-a9f0-1bd74b03d499" />
+
+
 ---
 
 ## Features
