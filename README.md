@@ -78,6 +78,7 @@ Add the badge to any view:
 ```yaml
 type: custom:jellymon-badge
 ```
+<img width="743" height="146" alt="Screenshot_20260615_102844_Home Assistant" src="https://github.com/user-attachments/assets/f692e0d2-a609-4ca4-9998-2fc69f1f7f67" />
 
 
 Or as a card:
