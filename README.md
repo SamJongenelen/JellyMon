@@ -79,10 +79,12 @@ Add the badge to any view:
 type: custom:jellymon-badge
 ```
 
+
 Or as a card:
 ```yaml
 type: custom:jellymon-card
 ```
+<img width="1080" height="1920" alt="Screenshot_20260615_102619_Home Assistant" src="https://github.com/user-attachments/assets/2b365507-454a-4b50-82b4-b460c4cf6d08" />
 
 Tap to open a dialog showing all users sorted by weekly activity, with full playback details for each active session.
 
