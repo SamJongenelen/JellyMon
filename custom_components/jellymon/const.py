@@ -1,0 +1,5 @@
+"""Constants for JellyMon."""
+DOMAIN = "jellymon"
+DEFAULT_SCAN_INTERVAL = 30
+DEFAULT_PORT = 8096
+DEFAULT_HOST = "192.168.1.28"

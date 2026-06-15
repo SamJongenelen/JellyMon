@@ -1,0 +1,68 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to Jellyfin",
+        "description": "Enter the details of your Jellyfin server to get started.\n\n**Finding your API token:** In Jellyfin, go to **Dashboard \u2192 API Keys** and create a new key with the **+** button.\n\n**Poll interval:** How frequently Home Assistant checks for active sessions. Lower values are more responsive but increase server load.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "token": "API Token",
+          "scan_interval": "Poll interval (seconds)"
+        },
+        "data_description": {
+          "host": "IP address or hostname of your Jellyfin server",
+          "port": "Default is 8096",
+          "token": "Generate an API key in Jellyfin \u2192 Dashboard \u2192 API Keys",
+          "scan_interval": "Between 10 and 300 seconds. Default is 30."
+        }
+      },
+      "select_users": {
+        "title": "Select Users",
+        "description": "{plugin_status}\n\nChoose which Jellyfin users to monitor. Each selected user will get a dedicated sensor in Home Assistant showing their current playback status.",
+        "data": {
+          "users": "Users to monitor"
+        }
+      },
+      "reconfigure": {
+        "title": "Update Server Connection",
+        "description": "Update the connection details for your Jellyfin server.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "token": "API Token",
+          "scan_interval": "Poll interval (seconds)"
+        },
+        "data_description": {
+          "host": "IP address or hostname of your Jellyfin server",
+          "port": "Default is 8096",
+          "token": "Generate an API key in Jellyfin \u2192 Dashboard \u2192 API Keys",
+          "scan_interval": "Between 10 and 300 seconds. Default is 30."
+        }
+      },
+      "reconfigure_users": {
+        "title": "Update Monitored Users",
+        "description": "{plugin_status}\n\nUpdate which Jellyfin users to monitor.",
+        "data": {
+          "users": "Users to monitor"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Unable to connect to Jellyfin. Check that the host and port are correct and the server is reachable.",
+      "invalid_auth": "Invalid API token. Generate a new one in Jellyfin under Dashboard \u2192 API Keys.",
+      "no_users_selected": "At least one user must be selected.",
+      "unknown": "An unexpected error occurred. Check the Home Assistant logs for details."
+    },
+    "abort": {
+      "already_configured": "JellyMon is already set up. Use the Reconfigure option to change settings."
+    }
+  },
+  "entity": {
+    "sensor": {
+      "active_sessions": {
+        "name": "Jellyfin Active Sessions"
+      }
+    }
+  }
+}
