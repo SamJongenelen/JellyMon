@@ -202,10 +202,17 @@ function openDialog(getHass) {
       </div>
     `;
 
-    // Close listeners are set once after first buildDialog call
-
-
+    // Re-attach close listener after every innerHTML rebuild
+    overlay.querySelector(".jm-close").addEventListener("click", close);
   }
+
+  function close() {
+    clearInterval(refreshInterval);
+    overlay.remove();
+  }
+
+  // Close on overlay background click
+  overlay.addEventListener("click", e => { if (e.target === overlay) close(); });
 
   // Force immediate data refresh when dialog opens
   if (getHass()?.callService) {
@@ -225,11 +232,6 @@ function openDialog(getHass) {
       clearInterval(refreshInterval);
     }
   }, 10000);
-
-  // Clear interval when dialog is closed
-  const origClose = () => { clearInterval(refreshInterval); overlay.remove(); };
-  overlay.querySelector(".jm-close").addEventListener("click", origClose);
-  overlay.addEventListener("click", e => { if (e.target === overlay) origClose(); });
 }
 
 // ─── Card ─────────────────────────────────────────────────────────────────────
