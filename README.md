@@ -4,7 +4,7 @@
 
 A custom Home Assistant integration for monitoring Jellyfin sessions. See who's watching what, on which device, with what codec and bitrate — right from your HA dashboard.
 
-<img width="400" alt="JellyMon dashboard" src="https://github.com/user-attachments/assets/3d1bdd13-02df-413d-a9f0-1bd74b03d499" />
+<img style="max-height:500px;width:auto" alt="JellyMon dashboard" src="https://github.com/user-attachments/assets/3d1bdd13-02df-413d-a9f0-1bd74b03d499" />
 
 ---
 
@@ -81,14 +81,14 @@ Add the badge to any view:
 type: custom:jellymon-badge
 ```
 
-<img width="400" alt="JellyMon badge" src="https://github.com/user-attachments/assets/f692e0d2-a609-4ca4-9998-2fc69f1f7f67" />
+<img style="max-height:300px;width:auto" alt="JellyMon badge" src="https://github.com/user-attachments/assets/f692e0d2-a609-4ca4-9998-2fc69f1f7f67" />
 
 Or as a card:
 ```yaml
 type: custom:jellymon-card
 ```
 
-<img width="400" alt="JellyMon card" src="https://github.com/user-attachments/assets/2b365507-454a-4b50-82b4-b460c4cf6d08" />
+<img style="max-height:500px;width:auto" alt="JellyMon card" src="https://github.com/user-attachments/assets/2b365507-454a-4b50-82b4-b460c4cf6d08" />
 
 Tap to open a dialog showing all users sorted by weekly activity, with full playback details for each active session.
 
