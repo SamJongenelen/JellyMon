@@ -1,11 +1,10 @@
 # 🪼 JellyMon
 
-> **This integration is fully vibe coded with [Claude](https://claude.ai). Every line of code, every config, and even the icons were generated through conversation with an Ai from my phone. Honestly, I only needed laptop for git squash all commits to hide LLM shame. No IDE, no local environment — just vibes.**
+> **This integration is fully vibe coded with [Claude](https://claude.ai). Every line of code, every config, and even the icons were generated through conversation with an AI from my phone. Honestly, I only needed a laptop for git squash to hide LLM shame. No IDE, no local environment — just vibes.**
 
 A custom Home Assistant integration for monitoring Jellyfin sessions. See who's watching what, on which device, with what codec and bitrate — right from your HA dashboard.
 
-<img width="1080" height="2340" alt="Screenshot_20260615_151130_Home Assistant" src="https://github.com/user-attachments/assets/3d1bdd13-02df-413d-a9f0-1bd74b03d499" />
-
+<img width="400" alt="JellyMon dashboard" src="https://github.com/user-attachments/assets/3d1bdd13-02df-413d-a9f0-1bd74b03d499" />
 
 ---
 
@@ -47,7 +46,7 @@ Weekly and monthly playtime per user requires the **Jellyfin Playback Reporting*
 1. In Jellyfin go to **Dashboard → Plugins → Catalog**
 2. Search for **Playback Reporting**, install, and restart Jellyfin
 
-The JellyMon config flow detects the plugin automatically and tells you whether it's present. If not installed, all other features still work — playtime attributes are simply omitted.
+The JellyMon config flow detects the plugin automatically and tells you. If not installed, all other features still work — playtime attributes are simply omitted.
 
 ---
 
@@ -81,14 +80,15 @@ Add the badge to any view:
 ```yaml
 type: custom:jellymon-badge
 ```
-<img width="743" height="146" alt="Screenshot_20260615_102844_Home Assistant" src="https://github.com/user-attachments/assets/f692e0d2-a609-4ca4-9998-2fc69f1f7f67" />
 
+<img width="400" alt="JellyMon badge" src="https://github.com/user-attachments/assets/f692e0d2-a609-4ca4-9998-2fc69f1f7f67" />
 
 Or as a card:
 ```yaml
 type: custom:jellymon-card
 ```
-<img width="1080" height="1920" alt="Screenshot_20260615_102619_Home Assistant" src="https://github.com/user-attachments/assets/2b365507-454a-4b50-82b4-b460c4cf6d08" />
+
+<img width="400" alt="JellyMon card" src="https://github.com/user-attachments/assets/2b365507-454a-4b50-82b4-b460c4cf6d08" />
 
 Tap to open a dialog showing all users sorted by weekly activity, with full playback details for each active session.
 
