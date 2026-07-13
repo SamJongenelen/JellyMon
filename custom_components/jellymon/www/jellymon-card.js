@@ -370,3 +370,326 @@ customElements.whenDefined("jellymon-badge").then(() => {
     });
   }
 });
+
+// ─── JellyMon Downgrade Card ─────────────────────────────────────────────────
+
+class JellyMonDowngradeCard extends HTMLElement {
+  constructor() {
+    super();
+    this.attachShadow({ mode: "open" });
+    this._config = {};
+    this._hass = null;
+    this._items = null;
+    this._loading = false;
+    this._error = null;
+  }
+
+  setConfig(config) {
+    this._config = {
+      min_size_gb: config.min_size_gb ?? 10,
+      users: config.users ?? ["sam", "tv"],
+      radarr_url: config.radarr_url ?? null,
+      sonarr_url: config.sonarr_url ?? null,
+    };
+    this._items = null; // Reset on config change
+    if (this._hass) this._fetchAndRender();
+  }
+
+  set hass(hass) {
+    this._hass = hass;
+    if (!this._items && !this._loading) this._fetchAndRender();
+    else this._render();
+  }
+
+  _getConnectionDetails() {
+    // Read Jellyfin connection from the active sensor's coordinator data
+    const active = this._hass?.states["sensor.jellyfin_active_sessions"];
+    if (!active) return null;
+    // We need base URL and token — stored in the HA integration config
+    // Fetch them via the entity's platform config exposed through attributes
+    // Fall back: parse from known sensor entity platform
+    return null; // Will be fetched via dedicated endpoint
+  }
+
+  async _fetchAndRender() {
+    if (!this._hass || this._loading) return;
+    this._loading = true;
+    this._error = null;
+    this._render();
+
+    try {
+      // Get Jellyfin connection details from HA config entry via REST API
+      const resp = await this._hass.callWS({
+        type: "config_entries/get",
+        domain: "jellymon",
+      });
+
+      const entry = resp?.[0];
+      if (!entry) throw new Error("JellyMon integration not found");
+
+      const { host, port, token } = entry.data ?? {};
+      if (!host || !token) throw new Error("Missing Jellyfin connection details");
+
+      const base = `http://${host}:${port}`;
+      const headers = {
+        Authorization: `MediaBrowser Token=${token}`,
+        accept: "application/json",
+      };
+
+      const get = async (path) => {
+        const r = await fetch(`${base}${path}`, { headers });
+        if (!r.ok) throw new Error(`Jellyfin ${path} returned ${r.status}`);
+        return r.json();
+      };
+
+      // Step 1: Get all users to find IDs for configured usernames
+      const allUsers = await get("/Users");
+      const targetUsers = this._config.users.map(u => u.toLowerCase());
+      const userMap = {};
+      for (const u of allUsers) {
+        if (targetUsers.includes(u.Name.toLowerCase())) {
+          userMap[u.Name.toLowerCase()] = u.Id;
+        }
+      }
+
+      if (Object.keys(userMap).length === 0) {
+        throw new Error(`No matching Jellyfin users found for: ${this._config.users.join(", ")}`);
+      }
+
+      // Step 2: Fetch watched items per user
+      const minBytes = this._config.min_size_gb * 1_073_741_824;
+      const userItems = {};
+
+      for (const [username, userId] of Object.entries(userMap)) {
+        const params = new URLSearchParams({
+          Filters: "IsPlayed",
+          IncludeItemTypes: "Movie,Series",
+          Recursive: "true",
+          Fields: "MediaSources,Size,MediaStreams,ProviderIds",
+          SortBy: "SortName",
+        });
+        const data = await get(`/Users/${userId}/Items?${params}`);
+        userItems[username] = new Map(data.Items.map(i => [i.Id, i]));
+      }
+
+      // Step 3: Intersect — only items watched by ALL configured users
+      const userIds = Object.keys(userMap);
+      if (userIds.length === 0) throw new Error("No users found");
+
+      const firstMap = userItems[userIds[0]];
+      let sharedIds = [...firstMap.keys()];
+      for (let i = 1; i < userIds.length; i++) {
+        const otherMap = userItems[userIds[i]];
+        sharedIds = sharedIds.filter(id => otherMap.has(id));
+      }
+
+      // Step 4: For each shared item get size, and fetch episode sizes for Series
+      const results = [];
+      for (const id of sharedIds) {
+        const item = firstMap.get(id);
+        let sizeBytes = 0;
+        let resolution = "";
+        let codec = "";
+
+        if (item.Type === "Movie") {
+          const src = item.MediaSources?.[0];
+          sizeBytes = src?.Size ?? 0;
+          const vs = src?.MediaStreams?.find(s => s.Type === "Video");
+          resolution = vs ? `${vs.Width}x${vs.Height}` : "";
+          codec = vs?.Codec?.toUpperCase() ?? "";
+
+        } else if (item.Type === "Series") {
+          // Fetch all episodes and sum sizes
+          const epData = await get(
+            `/Shows/${id}/Episodes?Fields=MediaSources,MediaStreams&UserId=${Object.values(userMap)[0]}`
+          );
+          for (const ep of epData.Items ?? []) {
+            sizeBytes += ep.MediaSources?.[0]?.Size ?? 0;
+          }
+          // Get resolution from first episode
+          const firstEp = epData.Items?.[0];
+          const vs = firstEp?.MediaSources?.[0]?.MediaStreams?.find(s => s.Type === "Video");
+          resolution = vs ? `${vs.Width}x${vs.Height}` : "";
+          codec = vs?.Codec?.toUpperCase() ?? "";
+        }
+
+        if (sizeBytes < minBytes) continue;
+
+        // Build Radarr/Sonarr link using TMDB/TVDB IDs
+        let arrUrl = null;
+        if (item.Type === "Movie" && this._config.radarr_url) {
+          arrUrl = this._config.radarr_url;
+        } else if (item.Type === "Series" && this._config.sonarr_url) {
+          arrUrl = this._config.sonarr_url;
+        }
+
+        results.push({
+          id,
+          title: item.Name,
+          year: item.ProductionYear ?? "",
+          type: item.Type,
+          sizeBytes,
+          sizeGb: (sizeBytes / 1_073_741_824).toFixed(1),
+          resolution,
+          codec,
+          arrUrl,
+        });
+      }
+
+      // Sort by size descending
+      results.sort((a, b) => b.sizeBytes - a.sizeBytes);
+      this._items = results;
+
+    } catch (err) {
+      this._error = err.message;
+    }
+
+    this._loading = false;
+    this._render();
+  }
+
+  _render() {
+    const min_gb = this._config.min_size_gb ?? 10;
+
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display: block; }
+        .card {
+          background: var(--ha-card-background, #1c1c1e);
+          border-radius: 12px; padding: 16px;
+          font-family: var(--paper-font-body1_-_font-family, sans-serif);
+          color: var(--primary-text-color, #fff);
+        }
+        .header {
+          display: flex; align-items: center; justify-content: space-between;
+          margin-bottom: 14px;
+        }
+        .title { font-size: 16px; font-weight: 700; }
+        .subtitle { font-size: 12px; color: #888; }
+        .refresh {
+          background: none; border: 1px solid #444; color: #888;
+          border-radius: 8px; padding: 4px 10px; cursor: pointer; font-size: 12px;
+        }
+        .refresh:hover { border-color: #AA5CC3; color: #AA5CC3; }
+        .loading { text-align: center; color: #888; padding: 24px 0; font-size: 13px; }
+        .error {
+          background: #2c1010; border-radius: 8px; padding: 12px;
+          color: #ff6b6b; font-size: 12px;
+        }
+        .empty { text-align: center; color: #666; padding: 24px 0; font-size: 13px; }
+        .item {
+          display: flex; align-items: center; gap: 12px;
+          background: #2c2c2e; border-radius: 10px;
+          padding: 10px 12px; margin-bottom: 8px;
+        }
+        .item:last-child { margin-bottom: 0; }
+        .item-type {
+          font-size: 10px; font-weight: 700; text-transform: uppercase;
+          letter-spacing: 0.5px; padding: 2px 6px; border-radius: 4px;
+          flex-shrink: 0;
+        }
+        .movie { background: #1a3a5c; color: #60a5fa; }
+        .series { background: #1a3a2a; color: #4ade80; }
+        .item-info { flex: 1; min-width: 0; }
+        .item-title {
+          font-size: 14px; font-weight: 600;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .item-meta { font-size: 11px; color: #888; margin-top: 2px; }
+        .item-size {
+          font-size: 15px; font-weight: 700; color: #AA5CC3;
+          flex-shrink: 0; text-align: right;
+        }
+        .item-size span { display: block; font-size: 10px; font-weight: 400; color: #666; }
+        .arr-link {
+          display: inline-block; margin-top: 4px;
+          font-size: 11px; color: #AA5CC3; text-decoration: none;
+        }
+        .arr-link:hover { text-decoration: underline; }
+        .total {
+          text-align: right; font-size: 12px; color: #666;
+          margin-top: 10px; padding-top: 10px;
+          border-top: 1px solid #2c2c2e;
+        }
+      </style>
+      <div class="card">
+        <div class="header">
+          <div>
+            <div class="title">🪼 Downgrade Candidates</div>
+            <div class="subtitle">
+              Watched by ${this._config.users.join(" & ")} · over ${min_gb} GB
+            </div>
+          </div>
+          <button class="refresh" id="refresh">↻ Refresh</button>
+        </div>
+
+        ${this._loading ? `<div class="loading">⏳ Scanning library…</div>` : ""}
+        ${this._error ? `<div class="error">⚠️ ${this._error}</div>` : ""}
+        ${!this._loading && !this._error && this._items !== null ? (
+          this._items.length === 0
+            ? `<div class="empty">No items over ${min_gb} GB watched by all users.</div>`
+            : `
+              ${this._items.map(item => `
+                <div class="item">
+                  <span class="item-type ${item.type === "Movie" ? "movie" : "series"}">
+                    ${item.type === "Movie" ? "🎬" : "📺"}
+                  </span>
+                  <div class="item-info">
+                    <div class="item-title">${item.title}${item.year ? ` (${item.year})` : ""}</div>
+                    <div class="item-meta">
+                      ${item.codec}${item.resolution ? ` · ${item.resolution}` : ""}
+                    </div>
+                    ${item.arrUrl ? `<a class="arr-link" href="${item.arrUrl}" target="_blank">
+                      Open in ${item.type === "Movie" ? "Radarr" : "Sonarr"} →
+                    </a>` : ""}
+                  </div>
+                  <div class="item-size">
+                    ${item.sizeGb} GB
+                    <span>on disk</span>
+                  </div>
+                </div>
+              `).join("")}
+              <div class="total">
+                ${this._items.length} item${this._items.length !== 1 ? "s" : ""} ·
+                ${(this._items.reduce((s, i) => s + i.sizeBytes, 0) / 1_073_741_824).toFixed(1)} GB total
+              </div>
+            `
+        ) : ""}
+        ${!this._loading && !this._error && this._items === null
+          ? `<div class="empty">Press refresh to scan your library.</div>` : ""}
+      </div>
+    `;
+
+    this.shadowRoot.getElementById("refresh")?.addEventListener("click", () => {
+      this._items = null;
+      this._fetchAndRender();
+    });
+  }
+
+  static getStubConfig() {
+    return {
+      users: ["sam", "tv"],
+      min_size_gb: 10,
+      radarr_url: "http://your-radarr:7878",
+      sonarr_url: "http://your-sonarr:8989",
+    };
+  }
+
+  static getConfigElement() { return document.createElement("div"); }
+}
+
+if (!customElements.get("jellymon-downgrade-card")) {
+  customElements.define("jellymon-downgrade-card", JellyMonDowngradeCard);
+}
+
+customElements.whenDefined("jellymon-downgrade-card").then(() => {
+  window.customCards = window.customCards || [];
+  if (!window.customCards.find(c => c.type === "jellymon-downgrade-card")) {
+    window.customCards.push({
+      type: "jellymon-downgrade-card",
+      name: "JellyMon Downgrade",
+      description: "Shows large watched items that are candidates for quality downgrade.",
+      preview: false,
+    });
+  }
+});
